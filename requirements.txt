@@ -1,6 +1,9 @@
 streamlit
 pandas
 numpy
+plotly
 beautifulsoup4
 lxml
-plotly
+feedparser
+python-dateutil
+requests
