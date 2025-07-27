@@ -2,10 +2,16 @@ import streamlit as st
 import pandas as pd
 import re
 import numpy as np
-import plotly.express as px
-import plotly.graph_objects as go
 
-# BeautifulSoup는 requirements.txt에서 자동 설치되므로 바로 import
+# plotly 안전하게 import
+try:
+    import plotly.express as px
+    import plotly.graph_objects as go
+    PLOTLY_AVAILABLE = True
+except ImportError:
+    PLOTLY_AVAILABLE = False
+    st.error("Plotly 설치가 필요합니다. requirements.txt를 확인해주세요.")
+
 from bs4 import BeautifulSoup
 
 st.set_page_config(page_title="SK 손익개선 AI v5 - 고급대시보드", page_icon="🏢", layout="wide")
@@ -295,7 +301,7 @@ class FinancialDataProcessor:
             for col in 영업이익률_row.columns[1:]:
                 if not col.endswith('_원시값'):
                     val = 영업이익률_row[col].iloc[0]
-                    if val != "-":
+                    if val != "-" and not pd.isna(val):  # 수정된 부분
                         try:
                             rates.append(float(str(val).replace('%', '')))
                         except:
@@ -403,135 +409,139 @@ def main():
         st.dataframe(merged_df, use_container_width=True)
         
         # 🚀 고급 대시보드 시작!
-        st.subheader("📈 단계 4: 고급 인터랙티브 대시보드")
-        
-        # 시나리오 선택
-        col1, col2 = st.columns([1, 3])
-        with col1:
-            scenario = st.selectbox("📊 분석 시나리오", 
-                ["현재수준", "보수적개선", "적극적개선"])
-        with col2:
-            st.info(f"선택된 시나리오: **{scenario}** - 이에 따른 예측 차트가 표시됩니다")
-        
-        # 바 차트 - 수익성 지표 비교
-        ratio_data = merged_df[merged_df['구분'].str.contains('%', na=False)]
-        if not ratio_data.empty:
-            st.write("#### 📊 수익성 지표 비교 (Bar Chart)")
-            companies = [col for col in ratio_data.columns if col != '구분' and not col.endswith('_원시값')]
+        if PLOTLY_AVAILABLE:
+            st.subheader("📈 단계 4: 고급 인터랙티브 대시보드")
             
-            # 데이터 준비
-            chart_data = []
-            for _, row in ratio_data.iterrows():
-                for company in companies:
-                    value = str(row[company]).replace('%', '')
-                    try:
-                        chart_data.append({
-                            '지표': row['구분'],
-                            '회사': company,
-                            '수치': float(value)
-                        })
-                    except:
-                        pass
+            # 시나리오 선택
+            col1, col2 = st.columns([1, 3])
+            with col1:
+                scenario = st.selectbox("📊 분석 시나리오", 
+                    ["현재수준", "보수적개선", "적극적개선"])
+            with col2:
+                st.info(f"선택된 시나리오: **{scenario}** - 이에 따른 예측 차트가 표시됩니다")
             
-            if chart_data:
-                chart_df = pd.DataFrame(chart_data)
-                fig = px.bar(chart_df, x='지표', y='수치', color='회사',
-                           title="💼 회사별 수익성 지표 비교",
-                           height=400,
-                           labels={'수치': '비율 (%)', '지표': '재무 지표'})
-                fig.update_layout(showlegend=True)
-                st.plotly_chart(fig, use_container_width=True)
-        
-        # 레이더 차트 - 종합 경쟁력 비교
-        st.write("#### 🎯 종합 경쟁력 레이더 차트")
-        companies = [col for col in merged_df.columns if col != '구분' and not col.endswith('_원시값')]
-        
-        if len(companies) >= 2:
-            fig = go.Figure()
-            
-            metrics = ['영업이익률(%)', '순이익률(%)', '매출원가율(%)']
-            colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7']
-            
-            for i, company in enumerate(companies[:3]):  # 최대 3개 회사
-                values = []
-                for metric in metrics:
-                    row = merged_df[merged_df['구분'] == metric]
-                    if not row.empty:
-                        val = str(row[company].iloc[0]).replace('%', '')
-                        try:
-                            # 매출원가율은 낮을수록 좋으므로 100에서 빼기
-                            if '원가율' in metric:
-                                values.append(100 - float(val))
-                            else:
-                                values.append(float(val))
-                        except:
-                            values.append(0)
-                    else:
-                        values.append(0)
+            # 바 차트 - 수익성 지표 비교
+            ratio_data = merged_df[merged_df['구분'].str.contains('%', na=False)]
+            if not ratio_data.empty:
+                st.write("#### 📊 수익성 지표 비교 (Bar Chart)")
+                companies = [col for col in ratio_data.columns if col != '구분' and not col.endswith('_원시값')]
                 
-                fig.add_trace(go.Scatterpolar(
-                    r=values,
-                    theta=[m.replace('(%)', '') for m in metrics],
-                    fill='toself',
-                    name=company,
-                    line=dict(color=colors[i])
-                ))
+                # 데이터 준비
+                chart_data = []
+                for _, row in ratio_data.iterrows():
+                    for company in companies:
+                        value = str(row[company]).replace('%', '')
+                        try:
+                            chart_data.append({
+                                '지표': row['구분'],
+                                '회사': company,
+                                '수치': float(value)
+                            })
+                        except:
+                            pass
+                
+                if chart_data:
+                    chart_df = pd.DataFrame(chart_data)
+                    fig = px.bar(chart_df, x='지표', y='수치', color='회사',
+                               title="💼 회사별 수익성 지표 비교",
+                               height=400,
+                               labels={'수치': '비율 (%)', '지표': '재무 지표'})
+                    fig.update_layout(showlegend=True)
+                    st.plotly_chart(fig, use_container_width=True)
             
+            # 레이더 차트 - 종합 경쟁력 비교
+            st.write("#### 🎯 종합 경쟁력 레이더 차트")
+            companies = [col for col in merged_df.columns if col != '구분' and not col.endswith('_원시값')]
+            
+            if len(companies) >= 2:
+                fig = go.Figure()
+                
+                metrics = ['영업이익률(%)', '순이익률(%)', '매출원가율(%)']
+                colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7']
+                
+                for i, company in enumerate(companies[:3]):  # 최대 3개 회사
+                    values = []
+                    for metric in metrics:
+                        row = merged_df[merged_df['구분'] == metric]
+                        if not row.empty:
+                            val = str(row[company].iloc[0]).replace('%', '')
+                            try:
+                                # 매출원가율은 낮을수록 좋으므로 100에서 빼기
+                                if '원가율' in metric:
+                                    values.append(100 - float(val))
+                                else:
+                                    values.append(float(val))
+                            except:
+                                values.append(0)
+                        else:
+                            values.append(0)
+                    
+                    fig.add_trace(go.Scatterpolar(
+                        r=values,
+                        theta=[m.replace('(%)', '') for m in metrics],
+                        fill='toself',
+                        name=company,
+                        line=dict(color=colors[i])
+                    ))
+                
+                fig.update_layout(
+                    polar=dict(
+                        radialaxis=dict(
+                            visible=True,
+                            range=[0, 20]  # 0-20% 범위로 조정
+                        )
+                    ),
+                    title="🌟 종합 경쟁력 비교 (높을수록 우수)",
+                    height=500,
+                    showlegend=True
+                )
+                
+                st.plotly_chart(fig, use_container_width=True)
+            
+            # 트렌드 라인 차트 (시나리오별 예측)
+            st.write("#### 📈 시나리오별 예상 개선 효과")
+            
+            # 가상의 분기별 데이터 생성
+            quarters = ['2024Q1', '2024Q2', '2024Q3', '2024Q4']
+            scenarios_data = []
+            
+            base_profit = 5.2  # 기준 영업이익률
+            
+            for q_idx, quarter in enumerate(quarters):
+                if scenario == "현재수준":
+                    improvement = 0
+                elif scenario == "보수적개선":
+                    improvement = 0.3 * (q_idx + 1)  # 분기별 0.3%p 개선
+                else:  # 적극적개선
+                    improvement = 0.8 * (q_idx + 1)  # 분기별 0.8%p 개선
+                
+                scenarios_data.append({
+                    '분기': quarter,
+                    '영업이익률': base_profit + improvement,
+                    '시나리오': scenario
+                })
+            
+            scenario_df = pd.DataFrame(scenarios_data)
+            
+            fig = px.line(scenario_df, x='분기', y='영업이익률',
+                         title=f"🚀 {scenario} 시나리오 - 분기별 영업이익률 개선 예상",
+                         markers=True,
+                         height=400)
+            fig.update_traces(line=dict(width=3))
             fig.update_layout(
-                polar=dict(
-                    radialaxis=dict(
-                        visible=True,
-                        range=[0, 20]  # 0-20% 범위로 조정
-                    )
-                ),
-                title="🌟 종합 경쟁력 비교 (높을수록 우수)",
-                height=500,
-                showlegend=True
+                yaxis_title="영업이익률 (%)",
+                xaxis_title="분기"
             )
             
             st.plotly_chart(fig, use_container_width=True)
-        
-        # 트렌드 라인 차트 (시나리오별 예측)
-        st.write("#### 📈 시나리오별 예상 개선 효과")
-        
-        # 가상의 분기별 데이터 생성
-        quarters = ['2024Q1', '2024Q2', '2024Q3', '2024Q4']
-        scenarios_data = []
-        
-        base_profit = 5.2  # 기준 영업이익률
-        
-        for q_idx, quarter in enumerate(quarters):
-            if scenario == "현재수준":
-                improvement = 0
-            elif scenario == "보수적개선":
-                improvement = 0.3 * (q_idx + 1)  # 분기별 0.3%p 개선
-            else:  # 적극적개선
-                improvement = 0.8 * (q_idx + 1)  # 분기별 0.8%p 개선
             
-            scenarios_data.append({
-                '분기': quarter,
-                '영업이익률': base_profit + improvement,
-                '시나리오': scenario
-            })
+            # 개선 효과 요약
+            if scenario != "현재수준":
+                final_improvement = scenarios_data[-1]['영업이익률'] - base_profit
+                st.success(f"🎯 **{scenario}** 시나리오 적용시 연말 기준 **{final_improvement:.1f}%p** 개선 예상!")
         
-        scenario_df = pd.DataFrame(scenarios_data)
-        
-        fig = px.line(scenario_df, x='분기', y='영업이익률',
-                     title=f"🚀 {scenario} 시나리오 - 분기별 영업이익률 개선 예상",
-                     markers=True,
-                     height=400)
-        fig.update_traces(line=dict(width=3))
-        fig.update_layout(
-            yaxis_title="영업이익률 (%)",
-            xaxis_title="분기"
-        )
-        
-        st.plotly_chart(fig, use_container_width=True)
-        
-        # 개선 효과 요약
-        if scenario != "현재수준":
-            final_improvement = scenarios_data[-1]['영업이익률'] - base_profit
-            st.success(f"🎯 **{scenario}** 시나리오 적용시 연말 기준 **{final_improvement:.1f}%p** 개선 예상!")
+        else:
+            st.warning("📊 Plotly 라이브러리가 설치되지 않아 기본 테이블만 표시됩니다.")
         
         # 분석 리포트
         st.subheader("💡 단계 5: AI 분석 리포트")
