@@ -2,8 +2,13 @@ import streamlit as st
 import pandas as pd
 import re
 import numpy as np
+import plotly.express as px
+import plotly.graph_objects as go
 
-st.set_page_config(page_title="SK 손익개선 AI v3", page_icon="🏢", layout="wide")
+# BeautifulSoup는 requirements.txt에서 자동 설치되므로 바로 import
+from bs4 import BeautifulSoup
+
+st.set_page_config(page_title="SK 손익개선 AI v5 - 고급대시보드", page_icon="🏢", layout="wide")
 
 class FinancialDataProcessor:
     
@@ -46,28 +51,27 @@ class FinancialDataProcessor:
     def load_file(self, uploaded_file):
         """XBRL 파일 로드 및 표준 손익계산서 항목 추출"""
         try:
-            from bs4 import BeautifulSoup
-        except ImportError:
-            st.error("pip install beautifulsoup4 lxml 필요")
-            return None
+            content = uploaded_file.read().decode('utf-8', 'ignore')
+            soup = BeautifulSoup(content, 'xml')
             
-        content = uploaded_file.read().decode('utf-8', 'ignore')
-        soup = BeautifulSoup(content, 'xml')
-        
-        # 회사명 추출
-        company_name = self._extract_company_name(soup, uploaded_file.name)
-        
-        # 재무 데이터 추출
-        financial_data = self._extract_financial_items(soup)
-        
-        if not financial_data:
-            st.error("재무 항목을 찾을 수 없습니다.")
-            return None
+            # 회사명 추출
+            company_name = self._extract_company_name(soup, uploaded_file.name)
             
-        # 표준 손익계산서 구조로 변환
-        income_statement = self._create_income_statement(financial_data, company_name)
-        
-        return income_statement
+            # 재무 데이터 추출
+            financial_data = self._extract_financial_items(soup)
+            
+            if not financial_data:
+                st.error("재무 항목을 찾을 수 없습니다.")
+                return None
+                
+            # 표준 손익계산서 구조로 변환
+            income_statement = self._create_income_statement(financial_data, company_name)
+            
+            return income_statement
+            
+        except Exception as e:
+            st.error(f"파일 처리 중 오류 발생: {str(e)}")
+            return None
     
     def _extract_company_name(self, soup, filename):
         """회사명 추출"""
@@ -316,8 +320,8 @@ class FinancialDataProcessor:
         return "\n".join(report)
 
 def main():
-    st.title("🏢 SK이노베이션 손익개선 AI v3 - 세밀한 경쟁분석")
-    st.write("### 표준 손익계산서 기반 경쟁사 비교 분석")
+    st.title("🏢 SK이노베이션 손익개선 AI v5 - 고급 대시보드")
+    st.write("### 표준 손익계산서 기반 경쟁사 비교 분석 + 인터랙티브 차트")
     
     processor = FinancialDataProcessor()
     
@@ -325,11 +329,11 @@ def main():
     with st.sidebar:
         st.header("📋 분석 가이드")
         st.write("""
-        **새로운 기능:**
-        - 표준 손익계산서 구조
-        - 다중 회사 비교 분석
-        - 자동 비율 계산
-        - 개선 아이디어 제안
+        **✨ v5 업데이트:**
+        - 고급 인터랙티브 차트
+        - 시나리오 분석 기능
+        - 레이더 차트 경쟁 비교
+        - Plotly 기반 시각화
         
         **분석 항목:**
         - 매출액, 매출원가, 매출총이익
@@ -360,7 +364,7 @@ def main():
         sample_df = pd.DataFrame(sample_data)
         st.dataframe(sample_df, use_container_width=True)
         
-        st.write("**💡 이런 식으로 표준 손익계산서 구조로 경쟁사를 비교분석합니다!**")
+        st.write("**💫 고급 차트가 포함된 분석 시스템입니다!**")
         return
     
     # 파일들 처리
@@ -398,31 +402,139 @@ def main():
         st.write("**📊 경쟁사 비교 손익계산서**")
         st.dataframe(merged_df, use_container_width=True)
         
-        # 시각화
-        ratio_rows = merged_df[merged_df['구분'].str.contains('%', na=False)]
-        if not ratio_rows.empty:
-            st.write("**📈 수익성 지표 비교**")
+        # 🚀 고급 대시보드 시작!
+        st.subheader("📈 단계 4: 고급 인터랙티브 대시보드")
+        
+        # 시나리오 선택
+        col1, col2 = st.columns([1, 3])
+        with col1:
+            scenario = st.selectbox("📊 분석 시나리오", 
+                ["현재수준", "보수적개선", "적극적개선"])
+        with col2:
+            st.info(f"선택된 시나리오: **{scenario}** - 이에 따른 예측 차트가 표시됩니다")
+        
+        # 바 차트 - 수익성 지표 비교
+        ratio_data = merged_df[merged_df['구분'].str.contains('%', na=False)]
+        if not ratio_data.empty:
+            st.write("#### 📊 수익성 지표 비교 (Bar Chart)")
+            companies = [col for col in ratio_data.columns if col != '구분' and not col.endswith('_원시값')]
             
-            # 차트 데이터 준비
-            chart_data = {}
-            for _, row in ratio_rows.iterrows():
-                metric = row['구분']
-                for col in row.index[1:]:
-                    if not col.endswith('_원시값') and row[col] != "-":
-                        try:
-                            value = float(str(row[col]).replace('%', ''))
-                            if col not in chart_data:
-                                chart_data[col] = {}
-                            chart_data[col][metric] = value
-                        except:
-                            pass
+            # 데이터 준비
+            chart_data = []
+            for _, row in ratio_data.iterrows():
+                for company in companies:
+                    value = str(row[company]).replace('%', '')
+                    try:
+                        chart_data.append({
+                            '지표': row['구분'],
+                            '회사': company,
+                            '수치': float(value)
+                        })
+                    except:
+                        pass
             
             if chart_data:
-                chart_df = pd.DataFrame(chart_data).T
-                st.bar_chart(chart_df)
+                chart_df = pd.DataFrame(chart_data)
+                fig = px.bar(chart_df, x='지표', y='수치', color='회사',
+                           title="💼 회사별 수익성 지표 비교",
+                           height=400,
+                           labels={'수치': '비율 (%)', '지표': '재무 지표'})
+                fig.update_layout(showlegend=True)
+                st.plotly_chart(fig, use_container_width=True)
+        
+        # 레이더 차트 - 종합 경쟁력 비교
+        st.write("#### 🎯 종합 경쟁력 레이더 차트")
+        companies = [col for col in merged_df.columns if col != '구분' and not col.endswith('_원시값')]
+        
+        if len(companies) >= 2:
+            fig = go.Figure()
+            
+            metrics = ['영업이익률(%)', '순이익률(%)', '매출원가율(%)']
+            colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7']
+            
+            for i, company in enumerate(companies[:3]):  # 최대 3개 회사
+                values = []
+                for metric in metrics:
+                    row = merged_df[merged_df['구분'] == metric]
+                    if not row.empty:
+                        val = str(row[company].iloc[0]).replace('%', '')
+                        try:
+                            # 매출원가율은 낮을수록 좋으므로 100에서 빼기
+                            if '원가율' in metric:
+                                values.append(100 - float(val))
+                            else:
+                                values.append(float(val))
+                        except:
+                            values.append(0)
+                    else:
+                        values.append(0)
+                
+                fig.add_trace(go.Scatterpolar(
+                    r=values,
+                    theta=[m.replace('(%)', '') for m in metrics],
+                    fill='toself',
+                    name=company,
+                    line=dict(color=colors[i])
+                ))
+            
+            fig.update_layout(
+                polar=dict(
+                    radialaxis=dict(
+                        visible=True,
+                        range=[0, 20]  # 0-20% 범위로 조정
+                    )
+                ),
+                title="🌟 종합 경쟁력 비교 (높을수록 우수)",
+                height=500,
+                showlegend=True
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+        
+        # 트렌드 라인 차트 (시나리오별 예측)
+        st.write("#### 📈 시나리오별 예상 개선 효과")
+        
+        # 가상의 분기별 데이터 생성
+        quarters = ['2024Q1', '2024Q2', '2024Q3', '2024Q4']
+        scenarios_data = []
+        
+        base_profit = 5.2  # 기준 영업이익률
+        
+        for q_idx, quarter in enumerate(quarters):
+            if scenario == "현재수준":
+                improvement = 0
+            elif scenario == "보수적개선":
+                improvement = 0.3 * (q_idx + 1)  # 분기별 0.3%p 개선
+            else:  # 적극적개선
+                improvement = 0.8 * (q_idx + 1)  # 분기별 0.8%p 개선
+            
+            scenarios_data.append({
+                '분기': quarter,
+                '영업이익률': base_profit + improvement,
+                '시나리오': scenario
+            })
+        
+        scenario_df = pd.DataFrame(scenarios_data)
+        
+        fig = px.line(scenario_df, x='분기', y='영업이익률',
+                     title=f"🚀 {scenario} 시나리오 - 분기별 영업이익률 개선 예상",
+                     markers=True,
+                     height=400)
+        fig.update_traces(line=dict(width=3))
+        fig.update_layout(
+            yaxis_title="영업이익률 (%)",
+            xaxis_title="분기"
+        )
+        
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # 개선 효과 요약
+        if scenario != "현재수준":
+            final_improvement = scenarios_data[-1]['영업이익률'] - base_profit
+            st.success(f"🎯 **{scenario}** 시나리오 적용시 연말 기준 **{final_improvement:.1f}%p** 개선 예상!")
         
         # 분석 리포트
-        st.subheader("💡 단계 4: AI 분석 리포트")
+        st.subheader("💡 단계 5: AI 분석 리포트")
         report = processor.create_comparison_report(merged_df)
         st.text(report)
 
