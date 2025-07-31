@@ -2,6 +2,8 @@ https://sk-financial-analyzer-npnprrnhjyknebmisuizyx.streamlit.app/
 
 여기 들어가면 이용 가능
 
+------------------------------
+
 기능 : 
 1. xbrl 원문파일 입력 시 데이터 추출 후,
 
